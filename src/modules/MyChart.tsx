@@ -195,14 +195,10 @@ export const MyChart = () => {
         },
         scales: {
             x: {
-                type: 'linear',
                 position: 'bottom',
                 ticks: {
                     callback: intToDate,
-                },
-            },
-            y: {
-                type: 'linear'
+                }
             }
         }
     }
