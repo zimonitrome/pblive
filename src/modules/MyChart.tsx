@@ -1,5 +1,5 @@
 import { createEffect, createSignal, onMount } from 'solid-js'
-import { Chart, Title, Tooltip, Legend, Colors, TimeScale } from 'chart.js'
+import { Chart, Title, Tooltip, Legend, Colors, TimeScale, registerables } from 'chart.js'
 import 'chartjs-adapter-moment';
 import { Line, Scatter } from 'solid-chartjs'
 import zoomPlugin from 'chartjs-plugin-zoom';
@@ -87,7 +87,7 @@ export const MyChart = () => {
      * otherwise you will have the most primitive UI
      */
     onMount(() => {
-        Chart.register(Title, Tooltip, Legend, Colors, zoomPlugin);
+        Chart.register(Title, Tooltip, Legend, Colors, zoomPlugin, ...registerables);
         loadData();
     });
 
