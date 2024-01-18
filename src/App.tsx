@@ -7,9 +7,8 @@ import { MyChart } from './modules/MyChart';
 const App: Component = () => {
   return (
     <div class={styles.App}>
-      <header class={styles.header}>
-        <MyChart />
-      </header>
+      {/* <header class={styles.header}></header> */}
+      <MyChart />
     </div>
   );
 };
