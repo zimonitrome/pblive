@@ -1,5 +1,6 @@
 import { createEffect, createSignal, createUniqueId, onMount } from 'solid-js'
-import { chart, data } from './MyChart';
+import { chart, data, loadData } from './MyChart';
+import controlStyles from './Controls.module.css';
 
 export type ModeType = "hotnesses" | "scores" | "comments";
 export const getModeTypeTitle = (mode: ModeType) => ({
@@ -39,7 +40,8 @@ export const RadioOption = (props: {
 };
 
 export const Controls = () => (
-    <table style={{
+    <table class={controlStyles.controlsTable}
+    style={{
         "text-align": "center",
         "font-size": "1.5rem",
         "margin": "1rem",
@@ -48,6 +50,7 @@ export const Controls = () => (
             <tr>
                 <th>Mode</th>
                 <th>Timespan</th>
+                <th>Refresh</th>
             </tr>
         </thead>
         <tbody>
@@ -89,6 +92,19 @@ export const Controls = () => (
                             }}>{text}</button>
                         ))}
                     </div>
+                </td>
+                <td style={{
+                    // padding: 0,
+                    // display: "flex",
+                }}>
+                    <button style={{
+                        width: "100%",
+                        height: "3rem",
+                        display: "block",
+                        "font-size": "2rem",
+                    }} onclick={e => {
+                        loadData();
+                    }}>⟳</button>
                 </td>
             </tr>
         </tbody>

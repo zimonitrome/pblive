@@ -87,6 +87,24 @@ function addHotnessToPosts(posts: AggregatedEntry[]) {
     });
 }
 
+export const loadData = async () => {
+    const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1XbSqIH7CzYTgKkjVmGP3FFPHs1sqM3D3aj7O4lFPfn0/gviz/tq?tqx=out:csv';
+
+    try {
+        const response = await fetch(spreadsheetUrl);
+
+        // Process data
+        const parsedData = parseCSV(await response.text());
+        const aggregatedData = aggregateData(parsedData);
+        addHotnessToPosts(aggregatedData);
+
+        setData(aggregatedData);
+
+    } catch (error) {
+        console.error('Error loading data:', error);
+    }
+};
+
 export let chart: Chart | undefined = undefined;
 // export const [chart, setChart] = createSignal<Chart>();
 export const [data, setData] = createSignal<AggregatedEntry[]>([]);
@@ -190,24 +208,6 @@ export const MyChart = () => {
 
         loadData();
     });
-
-    const loadData = async () => {
-        const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1XbSqIH7CzYTgKkjVmGP3FFPHs1sqM3D3aj7O4lFPfn0/gviz/tq?tqx=out:csv';
-
-        try {
-            const response = await fetch(spreadsheetUrl);
-
-            // Process data
-            const parsedData = parseCSV(await response.text());
-            const aggregatedData = aggregateData(parsedData);
-            addHotnessToPosts(aggregatedData);
-
-            setData(aggregatedData);
-
-        } catch (error) {
-            console.error('Error loading data:', error);
-        }
-    };
 
     createEffect(() => {
         if (chart) {
