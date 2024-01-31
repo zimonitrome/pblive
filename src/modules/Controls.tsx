@@ -73,7 +73,8 @@ export const Controls = () => (
                     }}>
                         {([["1 hour", 1 * 60 * 60 * 1000], ["24 hours", 24 * 60 * 60 * 1000], ["1 week", 7 * 24 * 60 * 60 * 1000]] as [string, number][]).map(([text, time]) => (
                             <button onclick={e => {
-                                const lastTime = Math.max(...data().map(entry => entry.current_times[entry.current_times.length - 1]));
+                                // const lastTime = Math.max(...data().map(entry => entry.current_times[entry.current_times.length - 1]));
+                                const lastTime = (new Date()).getTime();
                                 chart!.zoomScale('x', { min: lastTime - (1.1*time), max: lastTime + (0.1*time) }, 'default');
                                 chart!.options.plugins!.annotation!.annotations = {
                                     line1: {

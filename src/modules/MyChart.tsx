@@ -76,7 +76,7 @@ function aggregateData(entries: CsvEntry[]): AggregatedEntry[] {
 }
 
 // Function to add hotnesses to each post
-const decay_constant = 0.0000572 / 1000
+const decay_constant = 5.1966223406838415e-08;
 function addHotnessToPosts(posts: AggregatedEntry[]) {
     posts.forEach(post => {
         const timeCreated = post.post_time;
