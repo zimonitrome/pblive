@@ -1,115 +1,290 @@
-import { createEffect, createSignal, onMount } from 'solid-js'
-import { Chart, registerables } from 'chart.js'
+import { Show, createEffect, createSignal, on, onMount } from 'solid-js'
+import { Chart, ChartDataset, DefaultDataPoint, Point, registerables } from 'chart.js'
 import 'chartjs-adapter-moment';
+import { Controls, getModeTypeTitle, mode } from './Controls';
+import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, getPostsURL, getSubStatURL, stringToColorHash } from './helpers';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import annotationPlugin from 'chartjs-plugin-annotation';
-import { Controls, getModeTypeTitle, mode } from './Controls';
+import chartOptions from './chartOptions';
+import Spinner from './Spinner';
 
-type CsvEntry = {
-    current_time: string;
-    post_time: string;
-    id: string;
-    title: string;
-    score: string;
-    rank: string;
-    comments: string;
-};
-
-type AggregatedEntry = {
-    id: string;
-    title: string;
-    current_times: number[];
-    post_time: number;
-    scores: number[];
-    ranks: number[];
-    comments: number[];
-    hotnesses?: number[];
-};
-
-function parseCSV(csvData: string): CsvEntry[] {
-    const lines = csvData.split('\n');
-
-    // Regular expression to match CSV fields, considering quoted strings
-    const regex = /(".*?"|[^",]+)(?=\s*,|\s*$)/g;
-
-    // Extract headers
-    const headers = lines[0].match(regex)?.map(h => h.trim().replace(/"/g, '')) || [];
-
-    const result: CsvEntry[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-        const fields = lines[i].match(regex)?.map(field => field.trim().replace(/"/g, '')) || [];
-        const entry: CsvEntry = headers.reduce((obj, nextKey, index) => {
-            obj[nextKey as keyof CsvEntry] = fields[index] || '';
-            return obj;
-        }, {} as CsvEntry);
-        result.push(entry);
+type DateNumDict = { [dt: number]: number };
+type DateSeriesDict = {
+    [dt: number]: {
+        ids: string[];
+        values: number[];
     }
+};
+type DataStruct = {
+    active_users: DateNumDict;
+    subscribers: DateNumDict;
+    scores: DateSeriesDict
+    ranks: DateSeriesDict
+    comments: DateSeriesDict
+    hotness: DateSeriesDict
+};
 
-    return result;
-}
+type PostsStruct = {
+    [id: string]: {
+        author: string;
+        flair: string;
+        post_time: number;
+        title: string;
+    }
+};
 
+export const [allData, setAllData] = createSignal<DataStruct>({
+    active_users: {},
+    subscribers: {},
+    scores: {},
+    ranks: {},
+    comments: {},
+    hotness: {},
+});
+export const [postsData, setPostsData] = createSignal<PostsStruct>({});
 
-function aggregateData(entries: CsvEntry[]): AggregatedEntry[] {
-    const grouped: Record<string, AggregatedEntry> = {};
+export const [chartData, setChartData] = createSignal<[]>([]);
+export const [dateRange, setDateRange] = createSignal<[number, number]>([
+    (new Date().getTime()) / 1000 - (2 * 60 * 60 * 24),
+    (new Date().getTime()) / 1000
+]);
+const [columnToLoad, setColumnToLoad] = createSignal<Partial<SubStatsAttribute>>(
+    (mode() === "hotnesses" ? "scores" : mode()) as Partial<SubStatsAttribute>
+);
+const [isLoading, setIsLoading] = createSignal<boolean>(false);
 
-    entries.forEach(entry => {
-        if (!grouped[entry.id]) {
-            grouped[entry.id] = {
-                id: entry.id,
-                title: entry.title,
-                current_times: [],
-                post_time: parseInt(entry.post_time),
-                ranks: [],
-                scores: [],
-                comments: []
-            };
-        }
+export const loadData = async () => {    
+    // return;
 
-        grouped[entry.id].current_times.push(parseInt(entry.current_time));
-        grouped[entry.id].scores.push(parseInt(entry.score));
-        grouped[entry.id].comments.push(parseInt(entry.comments));
-        grouped[entry.id].ranks.push(parseInt(entry.rank));
-    });
-
-    return Object.values(grouped);
-}
-
-// Function to add hotnesses to each post
-const decay_constant = 5.1966223406838415e-08;
-function addHotnessToPosts(posts: AggregatedEntry[]) {
-    posts.forEach(post => {
-        const timeCreated = post.post_time;
-        post.hotnesses = post.scores.map((score: number, index: number) => {
-            const timeSincePosted = post.current_times[index] - timeCreated;
-            return score * Math.exp(-decay_constant * timeSincePosted)
-        });
-    });
-}
-
-export const loadData = async () => {
-    const spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/1XbSqIH7CzYTgKkjVmGP3FFPHs1sqM3D3aj7O4lFPfn0/gviz/tq?tqx=out:csv';
+    // TODO: check if data in range is already loaded
+    setIsLoading(true);
 
     try {
-        const response = await fetch(spreadsheetUrl);
+        // Fetch data
+        const url = getSubStatURL({
+            from: dateRange()[0],
+            to: dateRange()[1],
+            column: columnToLoad(),
+        });
+        const response = await fetch(url);
 
-        // Process data
-        const parsedData = parseCSV(await response.text());
-        const aggregatedData = aggregateData(parsedData);
-        addHotnessToPosts(aggregatedData);
+        let data = await response.text();
+        data = data.replaceAll('"', '');
+        // const nLines = data.split("\n").length;
 
-        setData(aggregatedData);
+        // Parse data
+        let newData: DateNumDict | DateSeriesDict = {};
+
+        if (["active_users", "subscribers"].includes(columnToLoad())) {
+            data.split("\n").slice(1).forEach((line) => {
+                const [dt, value] = line.split(",");
+                if (!value) {
+                    return;
+                }
+                newData[parseInt(dt)] = parseInt(value);
+            });
+        }
+        else {
+            data.split("\n").slice(1).forEach((line) => {
+                const [dt, ids, values] = line.split(",");
+                if (!ids || !values) {
+                    return;
+                }
+                newData[parseInt(dt)] = {
+                    ids: ids.split(";"),
+                    values: values.split(";").map((v: string) => parseInt(v))
+                }
+            });
+        }
+
+        setAllData((prev) => ({ ...prev, [columnToLoad()]: newData }));
 
     } catch (error) {
         console.error('Error loading data:', error);
     }
+
+
+    try {
+        // Fetch data
+        const url = getPostsURL(
+            dateRange()[0] - (5 * 60 * 60 * 24), // Load with a five days marginal (maybe more?)
+            dateRange()[1]
+        );
+        const response = await fetch(url);
+
+        let data = await response.text();
+        // const nLines = data.split("\n").length;
+
+        // Parse data
+        let newData: PostsStruct = {};
+
+        data.split("\n").slice(1).forEach((line) => {
+            const [id, author, flair, post_time, title] = line.split(",").map((v) => v.slice(1,-1));
+            newData[id] = {
+                author,
+                flair,
+                post_time: parseInt(post_time),
+                title
+            };
+        });
+
+        setPostsData((prev) => ({ ...prev, ...newData }));
+
+    } catch (error) {
+        console.error('Error loading data:', error);
+    }
+
+
+
+    reloadChart();
 };
+
+export const reloadChart = () => {
+    if (chart) {
+        // Change title correctly
+        if ((chart.options.scales as any).y.title.text !== getModeTypeTitle(mode())) {
+            (chart.options.scales as any).y.title.text = getModeTypeTitle(mode());
+            chart.data.datasets = [];
+        }
+
+        let newDatasets: ChartDataset<"line", DefaultDataPoint<"line">>[] = [];
+
+        const columnData = allData()[columnToLoad()];
+        if (["active_users", "subscribers"].includes(columnToLoad())) {
+            const dataPoints = Object.entries(columnData as DateNumDict).map(([dt, value]) => ({
+                x: 1000 * parseInt(dt),
+                y: value
+            }));
+
+            newDatasets.push({
+                label: getModeTypeTitle(mode()),
+                data: dataPoints,
+                showLine: true,
+                pointRadius: 0,
+                borderJoinStyle: 'bevel',
+            });
+        } else {
+            
+            let posts: { [id: string]: { x: number, y: number }[] } = {};
+
+            // Object.values(columnData as DateSeriesDict).forEach(({ids, values}) => {
+            Object.entries(columnData as DateSeriesDict).forEach(([dt, { ids, values }]) => {
+                ids.forEach((id, index) => {
+                    if (!posts[id]) {
+                        posts[id] = [];
+                    }
+                    let x = 1000 * parseInt(dt);
+                    let y = values[index];
+
+                    if (mode() === "hotnesses") {
+                        // Special case for hotnesses, need to apply function
+                        if (!postsData()[id]) {
+                            return;
+                        }
+                        y = calculateHotness(x, 1000*postsData()[id].post_time, y);
+                    }
+
+                    posts[id].push({x, y});
+                });
+            });
+
+            // // TODO: Re-calcluate hotness here.
+            // if (mode() === "hotnesses") {
+            //     const hotnesses = Object.entries(posts).map(([id, data]) => {
+            //         let hotness = 0;
+            //         data.forEach((point) => {
+            //             hotness += point.y;
+            //         });
+            //         return [id, hotness] as [string, number];
+            //     });
+            //     hotnesses.sort((a, b) => b[1] - a[1]);
+            //     hotnesses.slice(0, 10).forEach(([id, hotness]) => {
+            //         newDatasets.push({
+            //             label: id,
+            //             data: posts[id],
+            //             showLine: true,
+            //             pointRadius: 0,
+            //             borderJoinStyle: 'bevel',
+            //         });
+            //     });
+            // }
+
+            Object.entries(posts).forEach(([id, data]) => {
+                let color: string;
+                let label: string;
+                const post = (id in postsData()) ? postsData()[id] : undefined;
+                if (post !== undefined) {
+                    color = stringToColorHash(post.author);
+                    label = `${post.title}\t${post.author}\t${post.flair}`;
+                } else {
+                    color = stringToColorHash(id);
+                    label = id;
+                }
+                newDatasets.push({
+                    label: label,
+                    data: data,
+                    showLine: true,
+                    pointRadius: 0,
+                    borderJoinStyle: 'bevel',
+                    borderDash: post?.flair === "legacy comic" ? [10,5] : [],
+                    // Colors
+                    borderColor: color,
+                    backgroundColor: color,
+                    pointBackgroundColor: color,
+                    pointBorderColor: color,
+                    pointHoverBackgroundColor: color,
+                    pointHoverBorderColor: color,
+                });
+            });
+        }
+
+        for (const dataset of newDatasets) {
+            // Find dataset with same label in chart.data.datasets
+            const existingDataset = chart.data.datasets!.find((d) => d.label === dataset.label);
+            if (existingDataset === undefined) {
+                chart.data.datasets!.push(dataset);
+            } else {
+                // existingDataset.data = dataset.data;
+                const newPoints = (dataset.data as Point[]).filter(bItem => !(existingDataset.data as Point[]).some(aItem => aItem.x === bItem.x));
+                // existingDataset.data = [...existingDataset.data, ...newPoints];
+                newPoints.forEach(bItem => {
+                    // Find the index at which to insert bItem in A
+                    const insertAt = (existingDataset.data as Point[]).findIndex(aItem => aItem.x > bItem.x);
+                    // If bItem.x is greater than any x in A, append it; otherwise, insert it at the found index
+                    if (insertAt === -1) {
+                        existingDataset.data.push(bItem);
+                    } else {
+                        existingDataset.data.splice(insertAt, 0, bItem);
+                    }
+                });
+            }
+        }
+
+        // chart.data.datasets = datasets;
+
+        chart.update();
+        setIsLoading(false);
+    }
+}
+
 
 export let chart: Chart | undefined = undefined;
 // export const [chart, setChart] = createSignal<Chart>();
-export const [data, setData] = createSignal<AggregatedEntry[]>([]);
 
-export const MyChart = () => {
+export const zoom = (chart: Chart) => {
+    let xAxis = chart.scales.x;
+    let start = Math.round(xAxis.min / 1000);
+    let end = Math.round(xAxis.max / 1000);
+    setDateRange([start, end] as [number, number]);
+    loadData();
+}
+
+// Debounce zoom to not load too quickly
+export const onZoom = debounce((context: { chart: Chart }) => {
+    zoom(context.chart);
+}, 1000); // 1000 milliseconds = 1 second
+
+export const MyChart2 = () => {
     /**
      * You must register optional elements before using the chart,
      * otherwise you will have the most primitive UI
@@ -117,149 +292,49 @@ export const MyChart = () => {
 
     let ref: HTMLCanvasElement | undefined = undefined;
 
-    onMount(async () => {
+    // let datasets: ChartDataset[];
+    // if (mode() in ["active_users", "subscribers"]) {
+    //     datasets = [{
+    //         data: Object.values(chartData())
+    //     }]
+    // }
+    // else {
+    //     datasets = Object.values(chartData()).map((value) => ({
+    //         data: Object.values(value)
+    //     }));
+    // }
 
+
+    onMount(async () => {
         Chart.register(...registerables, zoomPlugin, annotationPlugin);
         chart = new Chart(ref!, {
-            type: 'scatter',
-            data: { datasets: [] },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'nearest',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        display: false // This will hide the legend
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function (context: any) {
-                                const datasetLabel = context.dataset.label;
-                                const xValue = context.raw.x;
-                                const yValue = context.raw.y;
-                                return [datasetLabel, intToDate(xValue as number), Math.round(yValue)];
-                            }
-                        }
-                    },
-                    zoom: {
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                        },
-                        zoom: {
-                            wheel: {
-                                enabled: true,
-                            },
-                            pinch: {
-                                enabled: true
-                            },
-                            mode: 'x',
-                            // drag: {
-                            //     enabled: true,
-                            //     borderColor: 'rgb(54, 162, 235)',
-                            //     borderWidth: 1,
-                            //     backgroundColor: 'rgba(54, 162, 235, 0.3)',
-                            //     modifierKey: 'ctrl',
-                            // }
-                        }
-                    },
-                    annotation: {
-                        annotations: {
-
-                        }
-                    }
-
-                },
-                scales: {
-                    x: {
-                        type: 'time',
-                        position: 'bottom',
-                        title: {
-                            display: true,
-                            text: "Time"
-                        },
-                        time: {
-                            displayFormats: {
-                                day: 'MMM DD HH:mm',
-                                hour: 'HH:mm',
-                                minute: 'HH:mm',
-                                second: 'HH:mm:ss',
-                            }
-                        },
-                        ticks: {
-                            major: {
-                                enabled: true,
-                                // fontStyle: 'bold', //You can also style these values differently
-                                // fontSize: 14 //You can also style these values differently
-                            },
-                        },
-                    },
-                    y: {
-                        title: {
-                            display: true,
-                        }
-                    }
-                }
-            }
+            type: "line",
+            data: {
+                labels: Object.keys(chartData()),
+                datasets: []
+            },
+            options: chartOptions
         });
 
-        loadData();
+        chart.options.plugins!.zoom!.zoom!.onZoomComplete = onZoom;
+        chart.options.plugins!.zoom!.pan!.onPanComplete = onZoom;
+        
     });
 
     createEffect(() => {
-        if (chart) {
-            const datasets = data().map(item => {
-                // Creating data points where each point is an object { x: time, y: score or comment }
-                const dataPoints = item.current_times.map((time, index) => {
-                    return {
-                        // x: new Date(time * 1000),
-                        x: time,
-                        y: item[mode()]![index]
-                    }; // Or item.comments[index]
-                });
-
-                return {
-                    label: item.title,
-                    data: dataPoints,
-                    showLine: true,
-                    pointRadius: 0,
-                    // fill: false,
-                    // borderColor: getRandomColor(),
-                    // tension: 0.1
-                    borderJoinStyle: 'bevel',
-                };
-            });
-
-            chart.data.datasets = datasets;
-            chart.update();
-        }
+        setColumnToLoad((mode() === "hotnesses" ? "scores" : mode()) as Partial<SubStatsAttribute>);
     });
 
-    createEffect(() => {
-        if (chart) {
-            (chart.options.scales as any).y.title.text = getModeTypeTitle(mode());
-        }
-    });
+    createEffect(on(mode, loadData));
 
-    const intToDate = (value: number | string) => {
-        const date = new Date(value);
-
-        // Formatting the day of the week
-        const dayOfWeek = date.toLocaleDateString(undefined, { weekday: 'short' });
-
-        // Formatting the time in 24-hour format with no seconds
-        const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-
-        return `${dayOfWeek} ${time}`;
-    };
 
     return (
         <>
-            <div class="chart-container" style="position: relative; height:80%; width:100%; margin: 1rem;">
+            <div class="chart-container" style="position: relative; height:80%; width:100%;">
                 <canvas id="chart" ref={ref} />
+                <Show when={isLoading()}>
+                    <Spinner />
+                </Show>
             </div>
             <Controls />
         </>
