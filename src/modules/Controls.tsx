@@ -1,16 +1,19 @@
-import { createEffect, createSignal, createUniqueId, onMount } from 'solid-js'
-import { chart, loadData, onZoom, setDateRange, zoom } from './MyChart';
+import { For, createEffect, createSignal, createUniqueId, onMount } from 'solid-js'
+import { chart, loadData, onZoom, postsData, setDateRange, zoom } from './MyChart';
 import controlStyles from './Controls.module.css';
+import { ChartData, ChartDataset, Point } from 'chart.js';
 
-export type ModeType = "hotnesses" | "scores" | "comments" | "active_users" | "subscribers";
+export type ModeType = "hotnesses" | "scores" | "comments" | "active_users" | "subscribers" | "upvote_ratios";
 export const getModeTypeTitle = (mode: ModeType) => ({
     hotnesses: "Hotness",
     scores: "Score",
     comments: "Comments",
     active_users: "Active Users",
     subscribers: "Subscribers",
+    upvote_ratios: "Upvote Ratio",
 }[mode]);
 export const [mode, setMode] = createSignal<ModeType>("hotnesses");
+export const [filterAuthor, setFilterAuthor] = createSignal<string>('');
 
 export const RadioOption = (props: {
     text: string,
@@ -38,6 +41,26 @@ export const RadioOption = (props: {
     </div>
 };
 
+export const applyFilters = (data: ChartDataset[]) => {
+    if (filterAuthor() === "") {
+        data.forEach(dataset => {
+            dataset.hidden = false;
+            console.log("unhiding");
+        });
+    }
+    else {
+        data.forEach(dataset => {
+            const datasetAuthor = postsData()[dataset.label!]?.author;
+
+            if (datasetAuthor === filterAuthor()) {
+                dataset.hidden = false;
+            } else {
+                dataset.hidden = true;
+            }
+        });
+    }
+};
+
 export const Controls = () => (
     <table class={controlStyles.controlsTable}
     style={{
@@ -51,6 +74,7 @@ export const Controls = () => (
             <tr>
                 <th>Mode</th>
                 <th>Timespan</th>
+                <th>Filter</th>
                 {/* <th>Refresh</th> */}
             </tr>
         </thead>
@@ -58,7 +82,7 @@ export const Controls = () => (
             <tr>
                 <td>
                     <div style={{"width": "max-content", "margin": "0 auto"}}>
-                        {(["hotnesses", "scores", "comments", "active_users", "subscribers"] as ModeType[]).map((value) => (
+                        {(["hotnesses", "scores", "comments", "active_users", "subscribers", "upvote_ratios"] as ModeType[]).map((value) => (
                             <RadioOption
                                 value={value}
                                 text={getModeTypeTitle(value)}
@@ -74,7 +98,13 @@ export const Controls = () => (
                         "flex-direction": "column",
                         "gap": ".5rem",
                     }}>
-                        {([["1 hour", 1 * 60 * 60 * 1000], ["24 hours", 24 * 60 * 60 * 1000], ["1 week", 7 * 24 * 60 * 60 * 1000]] as [string, number][]).map(([text, time]) => (
+                        {([
+                            ["1 hour", 1 * 60 * 60 * 1000],
+                            ["24 hours", 24 * 60 * 60 * 1000],
+                            ["1 week", 7 * 24 * 60 * 60 * 1000],
+                            ["1 month", 30 * 24 * 60 * 60 * 1000],
+                            ["1 year", 365 * 24 * 60 * 60 * 1000],
+                        ] as [string, number][]).map(([text, time]) => (
                             <button onclick={e => {
                                 // const lastTime = Math.max(...data().map(entry => entry.current_times[entry.current_times.length - 1]));
                                 const lastTime = (new Date()).getTime();
@@ -99,6 +129,40 @@ export const Controls = () => (
                                 // loadData();
                             }}>{text}</button>
                         ))}
+                    </div>
+                </td>
+                <td>
+                    <div style={{
+                        "display": "flex",
+                        "flex-direction": "column",
+                        "gap": ".5rem",
+                    }}>
+                        <label for="author">Author</label>
+                        <input
+                            type="text"
+                            placeholder='Press "Enter" to apply'
+                            value={filterAuthor()}
+                            // onInput={e => {
+                            //     setFilterAuthor((e.target as HTMLInputElement).value);
+                            // }}
+                            onKeyDown={e => {
+                                if (e.key === "Enter") {
+                                    console.log("\"" + (e.target as HTMLInputElement).value + "\"");
+                                    setFilterAuthor((e.target as HTMLInputElement).value);
+
+                                    applyFilters(chart!.data.datasets!);
+                                    chart!.update();
+                                }
+                            }}
+                            list="suggestions"
+                        />
+
+                        <datalist id="suggestions">
+                            <For each={Array.from(new Set(Object.values(postsData()).map(post => post.author))).sort()}>{(author) => (
+                                <option value={author} />
+                            )}
+                            </For>
+                        </datalist>
                     </div>
                 </td>
                 {/* <td style={{

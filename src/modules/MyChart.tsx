@@ -1,7 +1,7 @@
 import { Show, createEffect, createSignal, on, onMount } from 'solid-js'
 import { Chart, ChartDataset, DefaultDataPoint, Point, registerables } from 'chart.js'
 import 'chartjs-adapter-moment';
-import { Controls, getModeTypeTitle, mode } from './Controls';
+import { Controls, applyFilters, filterAuthor, getModeTypeTitle, mode } from './Controls';
 import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, getPostsURL, getSubStatURL, stringToColorHash } from './helpers';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import annotationPlugin from 'chartjs-plugin-annotation';
@@ -22,6 +22,7 @@ type DataStruct = {
     ranks: DateSeriesDict
     comments: DateSeriesDict
     hotness: DateSeriesDict
+    upvote_ratios: DateSeriesDict
 };
 
 type PostsStruct = {
@@ -40,6 +41,7 @@ export const [allData, setAllData] = createSignal<DataStruct>({
     ranks: {},
     comments: {},
     hotness: {},
+    upvote_ratios: {},
 });
 export const [postsData, setPostsData] = createSignal<PostsStruct>({});
 
@@ -92,7 +94,7 @@ export const loadData = async () => {
                 }
                 newData[parseInt(dt)] = {
                     ids: ids.split(";"),
-                    values: values.split(";").map((v: string) => parseInt(v))
+                    values: values.split(";").map((v: string) => parseFloat(v))
                 }
             });
         }
@@ -126,6 +128,27 @@ export const loadData = async () => {
                 post_time: parseInt(post_time),
                 title
             };
+
+            // Add the post times to the chart data
+            setAllData((prev) => {
+                prev.scores[parseInt(post_time)] = {
+                    ids: [id],
+                    values: [0]
+                };
+                prev.comments[parseInt(post_time)] = {
+                    ids: [id],
+                    values: [0]
+                };
+                prev.hotness[parseInt(post_time)] = {
+                    ids: [id],
+                    values: [0]
+                };
+                prev.upvote_ratios[parseInt(post_time)] = {
+                    ids: [id],
+                    values: [1.00]
+                };
+                return prev;
+            });
         });
 
         setPostsData((prev) => ({ ...prev, ...newData }));
@@ -183,6 +206,13 @@ export const reloadChart = () => {
                         }
                         y = calculateHotness(x, 1000*postsData()[id].post_time, y);
                     }
+                    if (mode() === "upvote_ratios") {
+                        // Special case for upvote_ratios, mulitply by 100
+                        if (!postsData()[id]) {
+                            return;
+                        }
+                        y *= 100;
+                    }
 
                     posts[id].push({x, y});
                 });
@@ -215,16 +245,16 @@ export const reloadChart = () => {
                 const post = (id in postsData()) ? postsData()[id] : undefined;
                 if (post !== undefined) {
                     color = stringToColorHash(post.author);
-                    label = `${post.title}\t${post.author}\t${post.flair}`;
+                    label = id;
                 } else {
                     color = stringToColorHash(id);
                     label = id;
                 }
+
                 newDatasets.push({
                     label: label,
                     data: data,
                     showLine: true,
-                    pointRadius: 0,
                     borderJoinStyle: 'bevel',
                     borderDash: post?.flair === "legacy comic" ? [10,5] : [],
                     // Colors
@@ -260,7 +290,17 @@ export const reloadChart = () => {
             }
         }
 
-        // chart.data.datasets = datasets;
+        // Make first point bigger as to indicate when the post was made
+        for (let dataset of (chart.data.datasets as ChartDataset<"line", (number | Point | null)[]>[])) {
+            const pointRadius = new Array(dataset.data.length).fill(0);
+            pointRadius[0] = 7;
+            dataset.pointRadius = pointRadius;
+        }
+
+        // Apply filters
+        applyFilters(chart.data.datasets!);
+
+        chart!.update();
 
         chart.update();
         setIsLoading(false);
@@ -318,7 +358,10 @@ export const MyChart2 = () => {
 
         chart.options.plugins!.zoom!.zoom!.onZoomComplete = onZoom;
         chart.options.plugins!.zoom!.pan!.onPanComplete = onZoom;
-        
+
+        // Set initial x-axis range to the date range
+        chart.options.scales!.x!.min = dateRange()[0] * 1000;
+        chart.options.scales!.x!.max = dateRange()[1] * 1000;
     });
 
     createEffect(() => {

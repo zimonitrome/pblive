@@ -4,7 +4,7 @@ export type URLOptions = {
     column: SubStatsColumn;
 }
 
-export type SubStatsAttribute = "active_users" | "subscribers" | "scores" | "ranks" | "comments";
+export type SubStatsAttribute = "active_users" | "subscribers" | "scores" | "ranks" | "comments" | "upvote_ratios";
 export type SubStatsColumn = "index" | "current_time" | "ids" | SubStatsAttribute;
 const columnToLetter: Record<SubStatsColumn, string> = {
     "index": "A",
@@ -15,6 +15,7 @@ const columnToLetter: Record<SubStatsColumn, string> = {
     "scores": "F",
     "ranks": "G",
     "comments": "H",
+    "upvote_ratios": "J"
 };
 
 const quantizationFromRange = (from: number, to: number) => {

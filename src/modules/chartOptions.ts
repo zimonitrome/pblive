@@ -1,5 +1,6 @@
 import { ChartOptions } from "chart.js";
-import { mode } from "./Controls";
+import { ModeType, mode } from "./Controls";
+import { postsData } from "./MyChart";
 
 const intToDate = (value: number | string) => {
     const date = new Date(value);
@@ -12,6 +13,10 @@ const intToDate = (value: number | string) => {
 
     return `${dayOfWeek} ${time}`;
 };
+
+function isInSubset<T extends ModeType>(mode: ModeType, subset: T[]): mode is T {
+    return subset.includes(mode as T);
+}
 
 const options: ChartOptions = {
     responsive: true,
@@ -35,21 +40,26 @@ const options: ChartOptions = {
                     const yValue = context.raw.y;
 
                     const modeString = mode();
-                    if (modeString === "comments" || modeString === "scores" || modeString === "hotnesses") {
-                        let label = [];
-                        if (datasetLabel.includes('\t')) {
-                            const [title, author, flair] = datasetLabel.split('\t');
-                            label = [title, `by /u/${author}`]; //, `[${flair}]`];
-                        } else {
-                            label =  [datasetLabel];
+
+                    if ( isInSubset(modeString, ["comments", "scores", "hotnesses", "upvote_ratios"])) {
+                        modeString;
+                        const id = datasetLabel;
+                        const post = (id in postsData()) ? postsData()[id] : undefined;
+
+                        if (!post) {
+                            return [id];
                         }
+
+                        const label = [post.title, `by /u/${post.author}`]; //, `[${flair}]`];
+
                         const suffix = {
-                            "hotnesses": "🔥",
-                            "scores": "points",
-                            "comments": "comments",
+                            "hotnesses": " 🔥",
+                            "scores": " points",
+                            "comments": " comments",
+                            "upvote_ratios": "%",
                         }[modeString];
 
-                        return [...label, '', `${Math.round(yValue)} ${suffix}`]
+                        return [...label, '', `${Math.round(yValue)}${suffix}`]
                     } else {
                         return [yValue];
                     }
