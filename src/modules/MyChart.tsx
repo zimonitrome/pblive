@@ -99,8 +99,6 @@ export const loadData = async () => {
             });
         }
 
-        console.log(data.split("\n").length);
-
         setAllData((prev) => ({ ...prev, [columnToLoad()]: newData }));
 
     } catch (error) {

@@ -22,7 +22,6 @@ const quantizationFromRange = (from: number, to: number) => {
     const indexColumn = columnToLetter["index"];
     const rangeSeconds = to - from;
     const rangeDays = rangeSeconds / (60 * 60 * 24);
-    console.log(rangeDays);
     if (rangeDays < 3) {
         return "";
     }
@@ -47,7 +46,6 @@ export const getSubStatURL = ({ from, to, column }: URLOptions) => {
     columnsToFetch.push(column);
     const columnsToFetchLetters = columnsToFetch.map((column) => columnToLetter[column]);
     const quantizationTerm = quantizationFromRange(from, to);
-    console.log(quantizationTerm);
     const query = `select ${columnsToFetchLetters.join()} where (B >= ${from} and B <= ${to} ${quantizationTerm})`;
 
     // Encoding the query

@@ -146,7 +146,6 @@ export const Controls = () => (
                             // }}
                             onKeyDown={e => {
                                 if (e.key === "Enter") {
-                                    console.log("\"" + (e.target as HTMLInputElement).value + "\"");
                                     setFilterAuthor((e.target as HTMLInputElement).value);
 
                                     applyFilters(chart!.data.datasets!);
