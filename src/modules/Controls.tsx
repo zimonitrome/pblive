@@ -45,7 +45,6 @@ export const applyFilters = (data: ChartDataset[]) => {
     if (filterAuthor() === "") {
         data.forEach(dataset => {
             dataset.hidden = false;
-            console.log("unhiding");
         });
     }
     else {

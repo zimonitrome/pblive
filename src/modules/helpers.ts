@@ -19,22 +19,18 @@ const columnToLetter: Record<SubStatsColumn, string> = {
 };
 
 const quantizationFromRange = (from: number, to: number) => {
+    const indexColumn = columnToLetter["index"];
     const rangeSeconds = to - from;
     const rangeDays = rangeSeconds / (60 * 60 * 24);
+    console.log(rangeDays);
     if (rangeDays < 3) {
         return "";
     }
-    else if (rangeDays < 7) {
-        return "and B ends with 0";
-    }
-    else if (rangeDays < 14) {
-        return "and B ends with 00";
-    }
-    else if (rangeDays < 30) {
-        return "and B ends with 000";
+    else if (rangeDays < (30*1.3)) {
+        return `and ${indexColumn} ends with "0"`;
     }
     else {
-        return "and B ends with 0000";
+        return `and ${indexColumn} ends with "00"`;
     }
 }
 
@@ -51,6 +47,7 @@ export const getSubStatURL = ({ from, to, column }: URLOptions) => {
     columnsToFetch.push(column);
     const columnsToFetchLetters = columnsToFetch.map((column) => columnToLetter[column]);
     const quantizationTerm = quantizationFromRange(from, to);
+    console.log(quantizationTerm);
     const query = `select ${columnsToFetchLetters.join()} where (B >= ${from} and B <= ${to} ${quantizationTerm})`;
 
     // Encoding the query
