@@ -51,9 +51,9 @@ export const applyFilters = (data: ChartDataset[]) => {
         data.forEach(dataset => {
             const datasetAuthor = postsData()[dataset.label!]?.author;
 
-            const filterAuthors = filterAuthor().split(",").map(author => author.trim());
+            const filterAuthors = filterAuthor().split(",").map(author => author.trim().toLowerCase());
 
-            if (filterAuthors.includes(datasetAuthor)) {
+            if (filterAuthors.includes(datasetAuthor?.toLowerCase())) {
                 dataset.hidden = false;
             } else {
                 dataset.hidden = true;
