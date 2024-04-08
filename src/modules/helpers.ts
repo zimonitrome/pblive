@@ -171,12 +171,16 @@ export const fpRankToWidth = (rank: number) => {
 }
 
 export const getFpRank = (id: string, dtNum: number, maxHistory: number = 5) => {
-    const frontpageRanks = allData().frontpage_ranks;
-
     // Function to check if the value is neither undefined nor NaN
     function isValid(value: number | undefined) {
         return value !== undefined && !Number.isNaN(value);
     }
+
+    const initalCheck = allData().frontpage_ranks[dtNum]?.[id];
+    if (isValid(initalCheck))
+        return initalCheck;
+
+    const frontpageRanks = allData().frontpage_ranks;
 
     // Get all dtNums sorted in ascending order
     const sortedDtNums = Object.keys(frontpageRanks)

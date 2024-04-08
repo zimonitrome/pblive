@@ -286,7 +286,7 @@ export const reloadChart = () => {
                             const p0rank = (ctx.p0 as any).raw?.fpRank;
                             const p1rank = (ctx.p1 as any).raw?.fpRank;
                             if (p0rank !== undefined && p1rank !== undefined)
-                                return fpRankToColor(p0rank);
+                                return fpRankToColor(p0rank ?? p1rank);
                             return color;
                         },
                         borderWidth: ctx => {

@@ -20,7 +20,7 @@ npm run build
 - [x] Add upvote percentage data
 - [x] Add filter for user
 - [ ] Ability to see post ID and maybe click to open reddit link
-- [ ] Add r/all placement
+- [x] Add r/all placement
 - [x] Add dots for when comic was posted
 - [x] Start at ~~24h~~ 48h
 - [ ] Fix CSS
