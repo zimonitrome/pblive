@@ -19,6 +19,7 @@ npm run build
 - [ ] Add option for derivative
 - [x] Add upvote percentage data
 - [x] Add filter for user
+    - [x] Multiple users filter
 - [ ] Ability to see post ID and maybe click to open reddit link
 - [x] Add r/all placement
 - [x] Add dots for when comic was posted
