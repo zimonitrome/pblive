@@ -63,7 +63,7 @@ export const applyFilters = (data: ChartDataset[]) => {
 export const Controls = () => (
     <table class={controlStyles.controlsTable}
     style={{
-        "text-align": "center",
+        // "text-align": "center",
         // "font-size": "1.5rem",
         // "margin": "1rem",
         width: "100%",
@@ -72,7 +72,7 @@ export const Controls = () => (
         <thead>
             <tr>
                 <th>Mode</th>
-                <th>Timespan</th>
+                <th>Zoom to past...</th>
                 <th>Filter</th>
                 {/* <th>Refresh</th> */}
             </tr>
@@ -98,16 +98,16 @@ export const Controls = () => (
                         "gap": ".5rem",
                     }}>
                         {([
-                            ["1 hour", 1 * 60 * 60 * 1000],
-                            ["24 hours", 24 * 60 * 60 * 1000],
-                            ["1 week", 7 * 24 * 60 * 60 * 1000],
-                            ["1 month", 30 * 24 * 60 * 60 * 1000],
-                            ["1 year", 365 * 24 * 60 * 60 * 1000],
+                            ["hour", 1 * 60 * 60 * 1000],
+                            ["day", 24 * 60 * 60 * 1000],
+                            ["week", 7 * 24 * 60 * 60 * 1000],
+                            ["month", 30 * 24 * 60 * 60 * 1000],
+                            ["year", 365 * 24 * 60 * 60 * 1000],
                         ] as [string, number][]).map(([text, time]) => (
                             <button onclick={e => {
                                 // const lastTime = Math.max(...data().map(entry => entry.current_times[entry.current_times.length - 1]));
                                 const lastTime = (new Date()).getTime();
-                                const zoomRange = { min: lastTime - (1.1*time), max: lastTime + (0.1*time) };
+                                const zoomRange = { min: lastTime - (1.03*time), max: lastTime + (0.03*time) };
                                 chart!.zoomScale('x', zoomRange, 'default');
                                 chart!.options.plugins!.annotation!.annotations = {
                                     line1: {

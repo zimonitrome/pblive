@@ -2,7 +2,7 @@ import { Show, createEffect, createSignal, on, onMount } from 'solid-js'
 import { Chart, ChartDataset, DefaultDataPoint, Point, registerables } from 'chart.js'
 import 'chartjs-adapter-moment';
 import { Controls, applyFilters, filterAuthor, getModeTypeTitle, mode } from './Controls';
-import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, getPostsURL, getSubStatURL, stringToColorHash } from './helpers';
+import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, fpRankToColor, fpRankToWidth, getFpRank, getPostsURL, getSubStatURL, stringToColorHash } from './helpers';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import chartOptions from './chartOptions';
@@ -23,6 +23,7 @@ type DataStruct = {
     comments: DateSeriesDict
     hotness: DateSeriesDict
     upvote_ratios: DateSeriesDict
+    frontpage_ranks: {[dt: number]: {[id: string]: number}}
 };
 
 type PostsStruct = {
@@ -42,6 +43,7 @@ export const [allData, setAllData] = createSignal<DataStruct>({
     comments: {},
     hotness: {},
     upvote_ratios: {},
+    frontpage_ranks: {}
 });
 export const [postsData, setPostsData] = createSignal<PostsStruct>({});
 
@@ -87,16 +89,30 @@ export const loadData = async () => {
             });
         }
         else {
+            let newFrontpageData: {[dt: number]: {[id: string]: number}} = {};
+
             data.split("\n").slice(1).forEach((line) => {
-                const [dt, ids, values] = line.split(",");
-                if (!ids || !values) {
+                const [dtRaw, idsRaw, fpRankRaw, valuesRaw] = line.split(",");
+                if (!idsRaw || !valuesRaw) {
                     return;
                 }
-                newData[parseInt(dt)] = {
-                    ids: ids.split(";"),
-                    values: values.split(";").map((v: string) => parseFloat(v))
+                const dt = parseInt(dtRaw);
+                const ids = idsRaw.split(";");
+                const fpRanks = fpRankRaw.split(";").map((v: string) => parseFloat(v))
+                const values = valuesRaw.split(";").map((v: string) => parseFloat(v))
+                
+                // The actual data we requested to fetch
+                newData[dt] = {
+                    ids,
+                    values
                 }
+
+                // Frontpage ranks to set colors
+                newFrontpageData[dt] = Object.fromEntries(ids.map((id, index) => [id, fpRanks[index]]));
+
             });
+
+            setAllData((prev) => ({ ...prev, ["frontpage_ranks"]: newFrontpageData }));
         }
 
         setAllData((prev) => ({ ...prev, [columnToLoad()]: newData }));
@@ -196,25 +212,31 @@ export const reloadChart = () => {
                     if (!posts[id]) {
                         posts[id] = [];
                     }
-                    let x = 1000 * parseInt(dt);
+                    const dtNum = parseInt(dt);
+                    let x = 1000 * dtNum;
                     let y = values[index];
+                    let extra = {};
+
+                    // Try get fp rank
+                    const fpRank = getFpRank(id, dtNum);
+                    if (fpRank !== undefined) {
+                        extra = {
+                            fpRank
+                        };
+                    }
 
                     if (mode() === "hotnesses") {
                         // Special case for hotnesses, need to apply function
-                        if (!postsData()[id]) {
+                        if (!postsData()[id])
                             return;
-                        }
                         y = calculateHotness(x, 1000*postsData()[id].post_time, y);
                     }
                     if (mode() === "upvote_ratios") {
                         // Special case for upvote_ratios, mulitply by 100
-                        if (!postsData()[id]) {
-                            return;
-                        }
                         y *= 100;
                     }
 
-                    posts[id].push({x, y});
+                    posts[id].push({x, y, ...extra});
                 });
             });
 
@@ -258,12 +280,35 @@ export const reloadChart = () => {
                     borderJoinStyle: 'bevel',
                     borderDash: post?.flair === "legacy comic" ? [10,5] : [],
                     // Colors
-                    borderColor: color,
-                    backgroundColor: color,
-                    pointBackgroundColor: color,
-                    pointBorderColor: color,
-                    pointHoverBackgroundColor: color,
-                    pointHoverBorderColor: color,
+                    // borderColor: [color],
+                    segment: {
+                        borderColor: ctx => {
+                            const p0rank = (ctx.p0 as any).raw?.fpRank;
+                            const p1rank = (ctx.p1 as any).raw?.fpRank;
+                            if (p0rank !== undefined && p1rank !== undefined)
+                                return fpRankToColor(p0rank);
+                            return color;
+                        },
+                        borderWidth: ctx => {
+                            const p0rank = (ctx.p0 as any).raw?.fpRank;
+                            const p1rank = (ctx.p1 as any).raw?.fpRank;
+                            if (p0rank !== undefined && p1rank !== undefined)
+                                return fpRankToWidth(p0rank);
+                            return 3;
+                        },
+                        borderCapStyle: ctx => {
+                            const p0rank = (ctx.p0 as any).raw?.fpRank;
+                            const p1rank = (ctx.p1 as any).raw?.fpRank;
+                            if (p0rank !== undefined && p1rank !== undefined)
+                                return 'round';
+                            return 'butt';
+                        }
+                    },
+                    backgroundColor: [color],
+                    pointBackgroundColor: [color],
+                    pointBorderColor: [color],
+                    pointHoverBackgroundColor: [color],
+                    pointHoverBorderColor: [color],
                 });
             });
         }
@@ -290,11 +335,32 @@ export const reloadChart = () => {
             }
         }
 
-        // Make first point bigger as to indicate when the post was made
         for (let dataset of (chart.data.datasets as ChartDataset<"line", (number | Point | null)[]>[])) {
+            if (dataset.label === getModeTypeTitle("active_users") || dataset.label === getModeTypeTitle("subscribers"))
+                continue;
+
+            // Make first point bigger as to indicate when the post was made
             const pointRadius = new Array(dataset.data.length).fill(0);
             pointRadius[0] = 7;
             dataset.pointRadius = pointRadius;
+
+            // // Change color of line depending on frontpage rank
+            // const borderColor = new Array(dataset.data.length).fill((dataset.borderColor as string[])[0]);
+
+            // // dataset.data.forEach((point, index) => {
+            // //     const dt = (point as Point).x / 1000;
+            // //     const id = dataset.label!;
+            // //     const frontpageRank = allData().frontpage_ranks[dt]?.values[allData().frontpage_ranks[dt].ids.indexOf(id)];
+
+            // //     console.log(frontpageRank);
+
+            // //     if (frontpageRank === undefined)
+            // //         return;
+
+            // //     borderColor[index] = fpRankToColor(frontpageRank);
+            // // });
+
+            // dataset.borderColor = borderColor;
         }
 
         // Apply filters
@@ -380,6 +446,6 @@ export const MyChart2 = () => {
                 </Show>
             </div>
             <Controls />
-        </>
+            <p>Made by <a href="https://reddit.com/u/zimonitrome">/u/zimonitrome</a>. View on <a href="https://github.com/zimonitrome/pblive">Github</a>.</p>        </>
     )
 }

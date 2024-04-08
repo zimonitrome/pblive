@@ -1,6 +1,7 @@
 import { ChartOptions } from "chart.js";
 import { ModeType, mode } from "./Controls";
 import { postsData } from "./MyChart";
+import { fpRankToEmoji } from "./helpers";
 
 const intToDate = (value: number | string) => {
     const date = new Date(value);
@@ -34,10 +35,10 @@ const options: ChartOptions = {
                 // title: function (tooltipItems: any) {
                 //     return 'Custom Title: ' + tooltipItems[0].label;
                 // },
-                label: function (context: any) {
-                    const datasetLabel = context.dataset.label;
-                    const xValue = context.raw.x;
-                    const yValue = context.raw.y;
+                label: function (ctx: any) {
+                    const datasetLabel = ctx.dataset.label;
+                    const xValue = ctx.raw.x;
+                    const yValue = ctx.raw.y;
 
                     const modeString = mode();
 
@@ -50,7 +51,11 @@ const options: ChartOptions = {
                             return [id];
                         }
 
-                        const label = [post.title, `by /u/${post.author}`]; //, `[${flair}]`];
+                        let label = [post.title, `by /u/${post.author}`, '']; //, `[${flair}]`];
+
+                        const rank = ctx.raw?.fpRank;
+                        if (rank !== undefined)
+                            label.push(`#${rank+1} on /r/all ${fpRankToEmoji(rank)}`);
 
                         const suffix = {
                             "hotnesses": " 🔥",
@@ -59,7 +64,9 @@ const options: ChartOptions = {
                             "upvote_ratios": "%",
                         }[modeString];
 
-                        return [...label, '', `${Math.round(yValue)}${suffix}`]
+                        label.push(`${Math.round(yValue)}${suffix}`);
+
+                        return label
                     } else {
                         return [yValue];
                     }
@@ -99,10 +106,10 @@ const options: ChartOptions = {
         x: {
             type: 'time',
             position: 'bottom',
-            title: {
-                display: true,
-                text: "Time"
-            },
+            // title: {
+            //     display: true,
+            //     text: "Time"
+            // },
             time: {
                 tooltipFormat:'MMM DD HH:mm',
                 displayFormats: {
