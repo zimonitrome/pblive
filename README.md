@@ -28,3 +28,4 @@ npm run build
 - [ ] Improve performance
     - Zooming is really slow
     - Maybe scrap points that are like more than 5 days outside current window
+    - Always sort current data points (sorted dict) to speed up baking in fpRank.
