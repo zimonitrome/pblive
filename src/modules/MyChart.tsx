@@ -2,11 +2,12 @@ import { Show, createEffect, createSignal, on, onMount } from 'solid-js'
 import { Chart, ChartDataset, DefaultDataPoint, Point, registerables } from 'chart.js'
 import 'chartjs-adapter-moment';
 import { Controls, applyFilters, filterAuthor, getModeTypeTitle, mode } from './Controls';
-import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, fpRankToColor, fpRankToWidth, getFpRank, getPostsURL, getSubStatURL, stringToColorHash } from './helpers';
+import { SubStatsAttribute, SubStatsColumn, URLOptions, calculateHotness, debounce, fpRankToColor, fpRankToWidth, getFpRank, getPostsURL, getSubStatURL, isValidRank, stringToColorHash } from './helpers';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import chartOptions from './chartOptions';
 import Spinner from './Spinner';
+import SortedNumberArray from './SortedNumberArray';
 
 type DateNumDict = { [dt: number]: number };
 type DateSeriesDict = {
@@ -46,6 +47,7 @@ export const [allData, setAllData] = createSignal<DataStruct>({
     frontpage_ranks: {}
 });
 export const [postsData, setPostsData] = createSignal<PostsStruct>({});
+export const allDates = new SortedNumberArray();
 
 export const [chartData, setChartData] = createSignal<[]>([]);
 export const [dateRange, setDateRange] = createSignal<[number, number]>([
@@ -81,11 +83,13 @@ export const loadData = async () => {
 
         if (["active_users", "subscribers"].includes(columnToLoad())) {
             data.split("\n").slice(1).forEach((line) => {
-                const [dt, value] = line.split(",");
+                const [dtRaw, value] = line.split(",");
                 if (!value) {
                     return;
                 }
-                newData[parseInt(dt)] = parseInt(value);
+                const dt = parseInt(dtRaw);
+                allDates.add(dt);
+                newData[dt] = parseInt(value);
             });
         }
         else {
@@ -100,6 +104,8 @@ export const loadData = async () => {
                 const ids = idsRaw.split(";");
                 const fpRanks = fpRankRaw.split(";").map((v: string) => parseFloat(v))
                 const values = valuesRaw.split(";").map((v: string) => parseFloat(v))
+
+                allDates.add(dt);
                 
                 // The actual data we requested to fetch
                 newData[dt] = {
@@ -179,6 +185,8 @@ export const loadData = async () => {
 };
 
 export const reloadChart = () => {
+    // const startTime = new Date().getTime();
+
     if (chart) {
         // Change title correctly
         if ((chart.options.scales as any).y.title.text !== getModeTypeTitle(mode())) {
@@ -224,6 +232,12 @@ export const reloadChart = () => {
                             fpRank
                         };
                     }
+                    // const fpRank = allData().frontpage_ranks[dtNum]?.[id];
+                    // if (isValidRank(fpRank)) {
+                    //     extra = {
+                    //         fpRank
+                    //     };
+                    // }
 
                     if (mode() === "hotnesses") {
                         // Special case for hotnesses, need to apply function
@@ -371,6 +385,10 @@ export const reloadChart = () => {
         chart.update();
         setIsLoading(false);
     }
+
+    // const endTime = new Date().getTime();
+    // const executionTime = endTime - startTime;
+    // console.log(`Execution time: ${executionTime}ms`);
 }
 
 

@@ -1,4 +1,4 @@
-import { allData } from "./MyChart";
+import { allData, allDates } from "./MyChart";
 
 export type URLOptions = {
     from: number;
@@ -170,48 +170,43 @@ export const fpRankToWidth = (rank: number) => {
     return 9;
 }
 
+// Function to check if the value is neither undefined nor NaN
+export function isValidRank(value: number | undefined) {
+    return value !== undefined && !Number.isNaN(value);
+}
+
 export const getFpRank = (id: string, dtNum: number, maxHistory: number = 5) => {
-    // Function to check if the value is neither undefined nor NaN
-    function isValid(value: number | undefined) {
-        return value !== undefined && !Number.isNaN(value);
-    }
+    const allDataCache = allData();  // Cache the allData call once
+    const frontpageRanks = allDataCache.frontpage_ranks;
 
-    const initalCheck = allData().frontpage_ranks[dtNum]?.[id];
-    if (isValid(initalCheck))
-        return initalCheck;
+    // Initial check to see if a valid rank exists for the given dtNum
+    const initialCheck = frontpageRanks[dtNum]?.[id];
+    if (isValidRank(initialCheck))
+        return initialCheck;
 
-    const frontpageRanks = allData().frontpage_ranks;
-
-    // Get all dtNums sorted in ascending order
-    const sortedDtNums = Object.keys(frontpageRanks)
-        .map(Number)
-        .sort((a, b) => a - b);
-
-    // Find the index of the current dtNum
-    const currentIndex = sortedDtNums.indexOf(dtNum);
+    // Finding the current index of dtNum
+    const currentIndex = allDates.indexOf(dtNum);  // Convert dtNum to string to match keys format
 
     // Check for valid rank in the next 5 higher dtNum values
-    const hasNextValid = sortedDtNums.slice(currentIndex + 1, currentIndex + 6).some(nextDtNum => {
-        const nextRank = frontpageRanks[nextDtNum]?.[id];
-        return isValid(nextRank);
+    const hasNextValid = allDates.items.slice(currentIndex + 1, currentIndex + 6).some(nextDtNum => {
+        const nextRank = frontpageRanks[Number(nextDtNum)]?.[id];  // Convert nextDtNum back to number
+        return isValidRank(nextRank);
     });
 
     if (!hasNextValid) {
-        // If no valid rank is found in the next 5 dtNums, return undefined immediately
         return undefined;
     }
 
-    // If there is a valid rank in the next 5 dtNums, check up to 5 previous dtNums
+    // If a valid rank is found in the next dtNums, search up to 5 previous dtNums
     for (let i = 1; i <= Math.min(maxHistory, currentIndex); i++) {
-        const prevDtNum = sortedDtNums[currentIndex - i];
-        const fpRank = frontpageRanks[prevDtNum]?.[id];
-
-        // If a valid fpRank is found, return it
-        if (isValid(fpRank)) {
+        const prevDtNum = allDates.items[currentIndex - i];
+        const fpRank = frontpageRanks[Number(prevDtNum)]?.[id];  // Convert prevDtNum back to number
+        if (isValidRank(fpRank)) {
             return fpRank;
         }
     }
 
-    // If no valid fpRank is found within the constraints, return undefined
     return undefined;
-}
+};
+
+
