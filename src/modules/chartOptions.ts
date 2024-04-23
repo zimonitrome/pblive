@@ -15,6 +15,23 @@ const intToDate = (value: number | string) => {
     return `${dayOfWeek} ${time}`;
 };
 
+const formatTimeDifference = (diffSeconds: number) => {
+    let parts: string[] = [];
+
+    // Convert milliseconds to days, hours, and minutes
+    let minutes = Math.floor((diffSeconds % (60 * 60)) / (60));
+    parts.unshift(minutes + 'm');
+    
+    let hours = Math.floor((diffSeconds % (60 * 60 * 24)) / (60 * 60));
+    if (hours > 0) parts.unshift(hours + 'h');
+    
+    let days = Math.floor(diffSeconds / (60 * 60 * 24));
+    if (days > 0) parts.unshift(days + 'd');
+
+    // Format the difference as DDd HHh mmm
+    return parts.join('');
+}
+
 function isInSubset<T extends ModeType>(mode: ModeType, subset: T[]): mode is T {
     return subset.includes(mode as T);
 }
@@ -51,19 +68,34 @@ const options: ChartOptions = {
                             return [id];
                         }
 
-                        let label = [post.title, `by /u/${post.author}`, '']; //, `[${flair}]`];
+                        let label = [];
 
+                        // Add title
+                        label.push(post.title)
+                        
+                        // Add author
+                        label.push(`by /u/${post.author}`);
+
+                        // Add age
+                        const diffSeconds = xValue / 1000 - post.post_time;
+                        if (diffSeconds > 0)
+                            label.push(`${formatTimeDifference(diffSeconds)} old`);
+
+                        // Add padding
+                        label.push('');
+
+                        // Add /r/all rank
                         const rank = ctx.raw?.fpRank;
                         if (rank !== undefined)
                             label.push(`#${rank+1} on /r/all ${fpRankToEmoji(rank)}`);
 
+                        // Add main value
                         const suffix = {
                             "hotnesses": " 🔥",
                             "scores": " points",
                             "comments": " comments",
                             "upvote_ratios": "%",
                         }[modeString];
-
                         label.push(`${Math.round(yValue)}${suffix}`);
 
                         return label

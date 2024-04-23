@@ -21,7 +21,7 @@ npm run build
 - [x] Add filter for user
     - [x] Multiple users filter
 - [ ] Ability to see post ID and maybe click to open reddit link
-- [ ] Add "time since posted"/"age" of post in tooltip
+- [x] Add "time since posted"/"age" of post in tooltip
 - [ ] Better hover on start dots
     - hoverradius and hitradius:
 ```

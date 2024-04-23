@@ -335,14 +335,24 @@ export const reloadChart = () => {
             }
         }
 
-        for (let dataset of (chart.data.datasets as ChartDataset<"line", (number | Point | null)[]>[])) {
+        // for (let dataset of (chart.data.datasets as ChartDataset<"line", (number | Point | null)[]>[])) {
+        (chart.data.datasets as ChartDataset<"line", (number | Point | null)[]>[]).forEach((dataset, i) => {
             if (dataset.label === getModeTypeTitle("active_users") || dataset.label === getModeTypeTitle("subscribers"))
-                continue;
+                return;
 
             // Make first point bigger as to indicate when the post was made
             const pointRadius = new Array(dataset.data.length).fill(0);
             pointRadius[0] = 7;
             dataset.pointRadius = pointRadius;
+            dataset.order = -i;
+
+            // const pointHitRadius = new Array(dataset.data.length).fill(10);
+            // pointHitRadius[0] = 20;
+            // dataset.pointHitRadius = pointHitRadius;
+
+            // const pointHoverRadius = new Array(dataset.data.length).fill(1);
+            // pointHoverRadius[0] = 20;
+            // dataset.pointHoverRadius = pointHoverRadius;
 
             // // Change color of line depending on frontpage rank
             // const borderColor = new Array(dataset.data.length).fill((dataset.borderColor as string[])[0]);
@@ -361,7 +371,7 @@ export const reloadChart = () => {
             // // });
 
             // dataset.borderColor = borderColor;
-        }
+        });
 
         // Apply filters
         applyFilters(chart.data.datasets!);
