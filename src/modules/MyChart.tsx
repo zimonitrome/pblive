@@ -280,7 +280,7 @@ export const reloadChart = () => {
                 let label: string;
                 const post = (id in postsData()) ? postsData()[id] : undefined;
                 if (post !== undefined) {
-                    color = stringToColorHash(post.author);
+                    color = stringToColorHash(post.author ?? '');
                     label = id;
                 } else {
                     color = stringToColorHash(id);
